@@ -44,12 +44,7 @@ int main(int argc, char **argv) {
         // Проверка условия для пробуждения медведя
         if (strcmp(buffer, "wake up") == 0) {
             printf("Bear woke up and sent a honey request\n");
-            printf("Press Enter to send a honey request (or 'q' to quit): ");
-            fgets(buffer, sizeof(buffer), stdin);
-
-            if (strcmp(buffer, "q\n") == 0) {
-               break;
-            }
+            sleep(2);
             // Отправка сообщения на сервер
             ssize_t sentLen = sendto(clientSocket, message, strlen(message), 0, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
             if (sentLen < 0) {

@@ -8,11 +8,17 @@
 
 int main(int argc, char **argv) {
     int serverSocket, clientSocket;
-    struct sockaddr_in serverAddress, clientAddress, clientAddressBear, clientAddressViewer;
+    struct sockaddr_in serverAddress, clientAddress, clientAddressBear, clientAddressViewer, clientAddressBee;
     socklen_t addrLen = sizeof(clientAddress);
     char buffer[MAX_MESSAGE_LENGTH];
-    int H = 10; // Вместимость горшка
+    int H = atoi(argv[3]); // Вместимость горшка
     int honey = 0; // Текущее количество меда в горшке
+    int counts_bee = atoi(argv[4]); // Количество пчёл в улье
+    
+    if(counts_bee <= 0){
+        perror("counts bee <= 0");
+        return 1;
+    }
 
     // Создание UDP-сокета для сервера
     serverSocket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -50,7 +56,8 @@ int main(int argc, char **argv) {
     }
 
     }
-    printf("Client Bear connected, waiting connected bear client\n");
+    printf("Client Bear connected, waiting connected viewer client\n");
+    
     while (1) {
     ssize_t recvLen = recvfrom(serverSocket, buffer, MAX_MESSAGE_LENGTH, 0, (struct sockaddr *)&clientAddress, &addrLen);
     if (recvLen < 0) {
@@ -67,7 +74,33 @@ int main(int argc, char **argv) {
     }
 
     }
-    printf("Client Viewer connected\n");
+    printf("Client Viewer connected, waiting connected bee client\n");
+    
+    while (1) {
+    ssize_t recvLen = recvfrom(serverSocket, buffer, MAX_MESSAGE_LENGTH, 0, (struct sockaddr *)&clientAddress, &addrLen);
+    if (recvLen < 0) {
+        perror("Failed to receive message");
+        break;
+    }
+
+    // Завершение строки сообщения
+    buffer[recvLen] = '\0';
+
+    if (strcmp(buffer, "bee_client") == 0) {
+        clientAddressBee = clientAddress;
+        break;
+    }
+
+    }
+    printf("Client Bee connected\n");
+    
+    char str[MAX_MESSAGE_LENGTH];
+    snprintf(str, MAX_MESSAGE_LENGTH - 1, "%d", counts_bee);
+    ssize_t sentLen = sendto(serverSocket, str, strlen(str), 0, (struct sockaddr *)&clientAddressBee, addrLen);
+    if (sentLen < 0) {
+       perror("Failed to send message");
+    }
+    
     while (1) {
         // Получение сообщения от клиента
         ssize_t recvLen = recvfrom(serverSocket, buffer, MAX_MESSAGE_LENGTH, 0, (struct sockaddr *)&clientAddress, &addrLen);
@@ -78,12 +111,26 @@ int main(int argc, char **argv) {
 
         // Завершение строки сообщения
         buffer[recvLen] = '\0';
-
+        
+        // Логика поведения медведя
+        if (strcmp(buffer, "bear") == 0) {
+            if (honey == H) {
+                honey = 0;
+                printf("Bear woke up and ate all the honey\n");
+                ssize_t sentLen = sendto(serverSocket, "bear sleeping", strlen("bear sleeping"), 0, (struct sockaddr *)&clientAddressViewer, addrLen);
+                if (sentLen < 0) {
+                    perror("Failed to send message");
+                    break;
+                }
+            } else {
+                printf("Bear woke up but the pot is not full\n");
+            }
+        }
         // Логика поведения пчел
-        if (strcmp(buffer, "bee") == 0) {
+            else {
             if (honey < H) {
                 honey++;
-                printf("Bee %s:%d added honey (%d/%d)\n", inet_ntoa(clientAddress.sin_addr), ntohs(clientAddress.sin_port), honey, H);
+                printf("Bee number %d added honey\n", atoi(buffer));
                 ssize_t sentLen3 = sendto(serverSocket, "Bee added honey", strlen("Bee added honey"), 0,
                 (struct sockaddr *)&clientAddressViewer, addrLen);
                 if (sentLen3 < 0) {
@@ -105,27 +152,13 @@ int main(int argc, char **argv) {
                     }
                 }
             } else {
-                printf("Bee %s:%d tried to add honey but the pot is full\n", inet_ntoa(clientAddress.sin_addr), ntohs(clientAddress.sin_port));
+                printf("Bee number %d tried to add honey but the pot is full\n", atoi(buffer));
                 ssize_t sentLen = sendto(serverSocket, "Bee tried to add honey but the pot is full", strlen("Bee tried to add honey but the pot is full"), 0,
                 (struct sockaddr *)&clientAddressViewer, addrLen);
                 if (sentLen < 0) {
                     perror("Failed to send message");
                     break;
                 }
-            }
-        }
-        // Логика поведения медведя
-        else if (strcmp(buffer, "bear") == 0) {
-            if (honey == H) {
-                honey = 0;
-                printf("Bear woke up and ate all the honey\n");
-                ssize_t sentLen = sendto(serverSocket, "bear sleeping", strlen("bear sleeping"), 0, (struct sockaddr *)&clientAddressViewer, addrLen);
-                if (sentLen < 0) {
-                    perror("Failed to send message");
-                    break;
-                }
-            } else {
-                printf("Bear woke up but the pot is not full\n");
             }
         }
     }
